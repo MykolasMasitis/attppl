@@ -1,0 +1,180 @@
+PROCEDURE ChkAnnIpS
+ IF MESSAGEBOX('œ–Œ¬≈–»“‹  ŒÃœÀ≈ “ÕŒ—“‹'+CHR(13)+CHR(10)+;
+  '»Õ‘Œ–Ã¿÷»ŒÕÕŒ… œŒ—€À » œ≈–≈ƒ'+CHR(13)+CHR(10)+'Œ“œ–¿¬ Œ… ¬ Ã√‘ŒÃ—?',4+32,'¿ÌÌÛÎËÓ‚‡ÌËÂ ÔËÍÂÔÎÂÌËˇ')=7
+  RETURN 
+ ENDIF 
+ 
+ pAnnDir = fso.GetParentFolderName(pBase)+'\ANNDIR'
+ IF !fso.FolderExists(pAnnDir)
+  fso.CreateFolder(pAnnDir)
+ ENDIF 
+ IF !fso.FolderExists(pAnnDir+'\INPUT')
+  fso.CreateFolder(pAnnDir+'\INPUT')
+ ENDIF 
+ IF !fso.FolderExists(pAnnDir+'\OUTPUT')
+  fso.CreateFolder(pAnnDir+'\OUTPUT')
+ ENDIF 
+ IF !fso.FileExists(pAnnDir+'\ips.dbf')
+  CREATE TABLE &pAnnDir\ips (recid i AUTOINC, "name" c(6), period c(4), npop n(2), "status" n(1), un_id c(8), formed t) 
+  INDEX on recid TAG recid CANDIDATE 
+  INDEX on name TAG name CANDIDATE 
+  USE 
+ ENDIF 
+ IF !fso.FileExists(pAnnDir+'\nps.dbf')
+  CREATE TABLE &pAnnDir\nps (recid i AUTOINC, ips i, lpu_id n(6), s_pol c(6), n_pol c(16), q c(2), akt_e c(15), date_e d, ;
+   reserv c(20)) 
+  INDEX on recid TAG recid CANDIDATE 
+  USE 
+ ENDIF 
+ 
+ IF OpenFile(pAnnDir+'\ips', 'ips', 'shar', 'name')>0
+  IF USED('ips')
+   USE IN ips 
+  ENDIF 
+  RETURN 
+ ENDIF 
+ IF OpenFile(pAnnDir+'\nps', 'nps', 'shar', 'recid')>0
+  USE IN ips 
+  IF USED('nps')
+   USE IN nps 
+  ENDIF 
+  RETURN 
+ ENDIF 
+ 
+ oMailDir        = fso.GetFolder(pAnnDir+'\INPUT')
+ MailDirName     = oMailDir.Path
+ oFilesInMailDir = oMailDir.Files
+ nFilesInMailDir = oFilesInMailDir.Count
+
+ IF nFilesInMailDir<=0
+  USE IN nps
+  USE IN ips 
+  RETURN 
+ ENDIF 
+
+ FOR EACH oFileInMailDir IN oFilesInMailDir
+
+  m.BFullName = oFileInMailDir.Path
+  m.bname     = oFileInMailDir.Name
+  m.recieved  = oFileInMailDir.DateLastModified
+  m.lpuid     = 0
+  m.processed = DATETIME()
+  
+  m.npFile = UPPER(oFileInMailDir.Name) && ‰ÓÎÊÌÓ ·˚Ú¸ NPS7011604.DBF
+  IF LEFT(m.npFile,2)!='NP'
+   LOOP 
+  ENDIF 
+  IF SUBSTR(m.npFile,3,2)!=m.qcod
+   LOOP 
+  ENDIF 
+  m.npop = SUBSTR(m.npFile,9,2)
+  IF !BETWEEN(INT(VAL(m.npop)),0,99)
+   LOOP 
+  ENDIF 
+  m.lcmon = SUBSTR(m.npFile,5,2)
+  IF !BETWEEN(INT(VAL(m.lcmon)),1,12)
+   LOOP 
+  ENDIF 
+  m.lcyear = SUBSTR(m.npFile,7,2)
+  IF !BETWEEN(INT(VAL(m.lcyear)),15,20)
+   LOOP 
+  ENDIF 
+  IF OpenFile(pAnnDir+'\INPUT\'+m.npFile, 'npFile', 'shar')>0
+   IF USED('npFile')
+    USE IN npFile
+   ENDIF 
+   LOOP 
+  ENDIF 
+  m.nrecs = RECCOUNT('npFile')
+  USE IN npFile
+  IF m.nrecs<=0
+   LOOP 
+  ENDIF 
+  
+  m.lcperiod = SUBSTR(m.npFile,5,4)
+  m.seFile = UPPER('se'+m.qcod+m.lcperiod+'.pdf')
+  IF !fso.FileExists(pAnnDir+'\INPUT\'+m.seFile)
+   LOOP 
+  ENDIF 
+  
+  IF SEEK(SUBSTR(m.npFile,5,6), 'ips')
+   MESSAGEBOX('œŒ¬“Œ–Õ¿ﬂ œŒ—€À ¿!',0+64,m.npFile)
+   LOOP 
+  ENDIF 
+  
+  IF fso.FileExists(pAnnDir+'\OUTPUT\'+m.npFile)
+   fso.DeleteFile(pAnnDir+'\OUTPUT\'+m.npFile)
+  ENDIF 
+  IF fso.FileExists(pAnnDir+'\OUTPUT\'+m.seFile)
+   fso.DeleteFile(pAnnDir+'\OUTPUT\'+m.seFile)
+  ENDIF 
+ 
+  fso.CopyFile(pAnnDir+'\INPUT\'+m.npFile, pAnnDir+'\OUTPUT\'+m.npFile, .t.)  
+  fso.CopyFile(pAnnDir+'\INPUT\'+m.seFile, pAnnDir+'\OUTPUT\'+m.seFile, .t.)  
+
+  IF !fso.FileExists(pAnnDir+'\OUTPUT\'+m.npFile)
+   LOOP 
+  ENDIF 
+  IF !fso.FileExists(pAnnDir+'\OUTPUT\'+m.seFile)
+   LOOP 
+  ENDIF 
+
+  IF fso.FileExists(pAnnDir+'\INPUT\'+m.npFile)
+   fso.DeleteFile(pAnnDir+'\INPUT\'+m.npFile)
+  ENDIF 
+  IF fso.FileExists(pAnnDir+'\INPUT\'+m.seFile)
+   fso.DeleteFile(pAnnDir+'\INPUT\'+m.seFile)
+  ENDIF 
+
+  ZipFile = 'D'+UPPER(m.qcod)+m.lcperiod+m.npop+'.zip'
+  IF fso.FileExists(pAnnDir+'\OUTPUT\'+ZipFile)
+   fso.DeleteFile(pAnnDir+'\OUTPUT\'+ZipFile)
+  ENDIF 
+ 
+  ZipOpen(pAnnDir+'\OUTPUT\'+ZipFile)
+  ZipFile(pAnnDir+'\OUTPUT\'+m.npFile,.t.)
+  ZipFile(pAnnDir+'\OUTPUT\'+m.seFile,.t.)
+  ZipClose()
+ 
+  IF !fso.FileExists(pAnnDir+'\OUTPUT\'+ZipFile)
+   IF USED('npFile')
+    USE IN npFile
+   ENDIF 
+   LOOP 
+  ENDIF 
+  
+*  IF fso.FileExists(pAnnDir+'\OUTPUT\'+m.npFile)
+*   fso.DeleteFile(pAnnDir+'\OUTPUT\'+m.npFile)
+*  ENDIF 
+  IF fso.FileExists(pAnnDir+'\OUTPUT\'+m.seFile)
+   fso.DeleteFile(pAnnDir+'\OUTPUT\'+m.seFile)
+  ENDIF
+  
+  IF OpenFile(pAnnDir+'\OUTPUT\'+m.npFile, 'npFile', 'shar')>0
+   IF USED('npFile')
+    USE IN npFile
+   ENDIF 
+   EXIT 
+  ENDIF 
+
+  INSERT INTO ips ("name",period,npop) VALUES (SUBSTR(m.npFile,5,6),m.lcperiod,INT(VAL(m.npop))) 
+  m.ips = GETAUTOINCVALUE()
+  
+  SELECT npFile
+  SCAN 
+   SCATTER FIELDS EXCEPT recid MEMVAR 
+   INSERT INTO nps FROM MEMVAR 
+  ENDSCAN 
+  USE
+
+  IF fso.FileExists(pAnnDir+'\OUTPUT\'+m.npFile)
+   fso.DeleteFile(pAnnDir+'\OUTPUT\'+m.npFile)
+  ENDIF 
+
+ ENDFOR 
+ 
+ USE IN nps 
+ USE IN ips 
+ MESSAGEBOX('Œ¡–¿¡Œ“ ¿ «¿ ŒÕ◊≈Õ¿!',0+64,'')
+
+RETURN 
